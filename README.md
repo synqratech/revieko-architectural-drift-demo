@@ -1,11 +1,91 @@
-# mitmproxy
+# Revieko Demo Fork — mitmproxy (Architectural Drift & Structural Risk)
 
-[![Continuous Integration Status](https://github.com/mitmproxy/mitmproxy/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/mitmproxy/mitmproxy/actions?query=branch%3Amain)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/a38b0325dfb944839c0c8da354f70b1b)](https://app.codacy.com/gh/mitmproxy/mitmproxy/dashboard)
-[![autofix.ci: enabled](https://shields.mitmproxy.org/badge/autofix.ci-yes-success?logo=data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCB0cmFuc2Zvcm09InNjYWxlKDAuMDYxLC0wLjA2MSkgdHJhbnNsYXRlKC0yNTAsLTE3NTApIiBkPSJNMTMyNSAtMzQwcS0xMTUgMCAtMTY0LjUgMzIuNXQtNDkuNSAxMTQuNXEwIDMyIDUgNzAuNXQxMC41IDcyLjV0NS41IDU0djIyMHEtMzQgLTkgLTY5LjUgLTE0dC03MS41IC01cS0xMzYgMCAtMjUxLjUgNjJ0LTE5MSAxNjl0LTkyLjUgMjQxcS05MCAxMjAgLTkwIDI2NnEwIDEwOCA0OC41IDIwMC41dDEzMiAxNTUuNXQxODguNSA4MXExNSA5OSAxMDAuNSAxODAuNXQyMTcgMTMwLjV0MjgyLjUgNDlxMTM2IDAgMjU2LjUgLTQ2IHQyMDkgLTEyNy41dDEyOC41IC0xODkuNXExNDkgLTgyIDIyNyAtMjEzLjV0NzggLTI5OS41cTAgLTEzNiAtNTggLTI0NnQtMTY1LjUgLTE4NC41dC0yNTYuNSAtMTAzLjVsLTI0MyAtMzAwdi01MnEwIC0yNyAzLjUgLTU2LjV0Ni41IC01Ny41dDMgLTUycTAgLTg1IC00MS41IC0xMTguNXQtMTU3LjUgLTMzLjV6TTEzMjUgLTI2MHE3NyAwIDk4IDE0LjV0MjEgNTcuNXEwIDI5IC0zIDY4dC02LjUgNzN0LTMuNSA0OHY2NGwyMDcgMjQ5IHEtMzEgMCAtNjAgNS41dC01NCAxMi41bC0xMDQgLTEyM3EtMSAzNCAtMiA2My41dC0xIDU0LjVxMCA2OSA5IDEyM2wzMSAyMDBsLTExNSAtMjhsLTQ2IC0yNzFsLTIwNSAyMjZxLTE5IC0xNSAtNDMgLTI4LjV0LTU1IC0yNi41bDIxOSAtMjQydi0yNzZxMCAtMjAgLTUuNSAtNjB0LTEwLjUgLTc5dC01IC01OHEwIC00MCAzMCAtNTMuNXQxMDQgLTEzLjV6TTEyNjIgNjE2cS0xMTkgMCAtMjI5LjUgMzQuNXQtMTkzLjUgOTYuNWw0OCA2NCBxNzMgLTU1IDE3MC41IC04NXQyMDQuNSAtMzBxMTM3IDAgMjQ5IDQ1LjV0MTc5IDEyMXQ2NyAxNjUuNWg4MHEwIC0xMTQgLTc3LjUgLTIwNy41dC0yMDggLTE0OXQtMjg5LjUgLTU1LjV6TTgwMyA1OTVxODAgMCAxNDkgMjkuNXQxMDggNzIuNWwyMjEgLTY3bDMwOSA4NnE0NyAtMzIgMTA0LjUgLTUwdDExNy41IC0xOHE5MSAwIDE2NSAzOHQxMTguNSAxMDMuNXQ0NC41IDE0Ni41cTAgNzYgLTM0LjUgMTQ5dC05NS41IDEzNHQtMTQzIDk5IHEtMzcgMTA3IC0xMTUuNSAxODMuNXQtMTg2IDExNy41dC0yMzAuNSA0MXEtMTAzIDAgLTE5Ny41IC0yNnQtMTY5IC03Mi41dC0xMTcuNSAtMTA4dC00MyAtMTMxLjVxMCAtMzQgMTQuNSAtNjIuNXQ0MC41IC01MC41bC01NSAtNTlxLTM0IDI5IC01NCA2NS41dC0yNSA4MS41cS04MSAtMTggLTE0NSAtNzB0LTEwMSAtMTI1LjV0LTM3IC0xNTguNXEwIC0xMDIgNDguNSAtMTgwLjV0MTI5LjUgLTEyM3QxNzkgLTQ0LjV6Ii8+PC9zdmc+)](https://autofix.ci)
-[![Coverage Status](https://shields.mitmproxy.org/codecov/c/github/mitmproxy/mitmproxy/main.svg?label=codecov)](https://codecov.io/gh/mitmproxy/mitmproxy)
-[![Latest Version](https://shields.mitmproxy.org/pypi/v/mitmproxy.svg)](https://pypi.python.org/pypi/mitmproxy)
-[![Supported Python versions](https://shields.mitmproxy.org/pypi/pyversions/mitmproxy.svg)](https://pypi.python.org/pypi/mitmproxy)
+This repository is a **demo fork** of **[mitmproxy/mitmproxy](https://github.com/mitmproxy/mitmproxy)** (MIT licensed) used to showcase **Revieko — Architecture Drift Radar** on a real-world Python backend codebase.
+
+- Upstream project: https://github.com/mitmproxy/mitmproxy  
+- License: MIT (see [LICENSE](./LICENSE))  
+- Fork notice: see [UPSTREAM.md](./UPSTREAM.md)
+
+> Looking for the original mitmproxy docs and installation? Use the upstream links below.
+
+---
+
+## What this demo is for
+
+Modern PRs (especially large or AI-assisted ones) can look safe:
+- CI passes
+- tests are green
+- the diff “reads fine”
+
+…and still drift architecture, expand blast radius, or introduce hidden coupling.
+
+This repo is prepared to let you **fork → open a prebuilt PR → get a Revieko report** in minutes.
+
+---
+
+## What is Revieko?
+
+**Revieko — Architecture Drift Radar** is a GitHub App that generates a **risk-first review report** for pull requests:
+- highlights *where* trust is required first
+- flags structural/architectural risk signals
+- helps reviewers focus on the highest blast-radius areas
+
+GitHub App: https://github.com/apps/revieko-architecture-drift-radar  
+Docs: https://synqra.tech/revieko-docs
+
+---
+
+## Quickstart (5–10 minutes)
+
+### 1) Fork this repository
+When forking, **do not fork only the default branch**.  
+You need the demo branches too.
+
+### 2) Install the Revieko GitHub App
+Install: https://github.com/apps/revieko-architecture-drift-radar
+
+Grant it access to your fork (repository permissions as requested by GitHub during install).
+
+### 3) Open a demo PR
+In your fork, create a pull request from a demo branch into your default branch (usually `main`).
+
+- Demo branches are named: `demo/pr-XX-...`
+- A list of scenarios will be tracked in: **DEMO_PRS.md** *(placeholder — to be added)*
+
+### 4) View the report
+Revieko will comment on the PR with:
+- a short summary
+- a link to the full HTML report
+
+---
+
+## Demo PR scenarios (placeholder)
+
+We will add a set of intentionally-designed PRs that simulate common real-world risk patterns:
+
+- hidden coupling across layers
+- API boundary drift
+- runtime side effects / state leaks
+- performance regressions via algorithmic complexity
+- “safe-looking” refactors with high blast radius
+
+➡️ See **DEMO_PRS.md** *(to be added)*
+
+---
+
+## Need help?
+
+- Documentation: https://synqra.tech/revieko-docs  
+- GitHub App: https://github.com/apps/revieko-architecture-drift-radar  
+- Contact (placeholder):  
+  - Email: `hello@synqra.tech`  
+  - LinkedIn: `https://www.linkedin.com/in/<your-handle>`  
+
+*(Replace placeholders with your actual contacts.)*
+
+---
+
+## Upstream project (mitmproxy)
 
 ``mitmproxy`` is an interactive, SSL/TLS-capable intercepting proxy with a console
 interface for HTTP/1, HTTP/2, and WebSockets.
@@ -14,29 +94,8 @@ interface for HTTP/1, HTTP/2, and WebSockets.
 
 ``mitmweb`` is a web-based interface for mitmproxy.
 
-## Installation
+Installation instructions (upstream):  
+https://docs.mitmproxy.org/stable/overview-installation
 
-The installation instructions are [here](https://docs.mitmproxy.org/stable/overview-installation).
-If you want to install from source, see [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-## Documentation & Help
-
-General information, tutorials, and precompiled binaries can be found on the mitmproxy website.
-
-[![mitmproxy.org](https://shields.mitmproxy.org/badge/https%3A%2F%2F-mitmproxy.org-blue.svg)](https://mitmproxy.org/)
-
-The documentation for mitmproxy is available on our website:
-
-[![mitmproxy documentation stable](https://shields.mitmproxy.org/badge/docs-stable-brightgreen.svg)](https://docs.mitmproxy.org/stable/)
-[![mitmproxy documentation dev](https://shields.mitmproxy.org/badge/docs-dev-brightgreen.svg)](https://docs.mitmproxy.org/dev/)
-
-If you have questions on how to use mitmproxy, please
-use GitHub Discussions!
-
-[![mitmproxy discussions](https://shields.mitmproxy.org/badge/help-github%20discussions-orange.svg)](https://github.com/mitmproxy/mitmproxy/discussions)
-
-## Contributing
-
-As an open source project, mitmproxy welcomes contributions of all forms.
-
-[![Dev Guide](https://shields.mitmproxy.org/badge/dev_docs-CONTRIBUTING.md-blue)](./CONTRIBUTING.md)
+Contributing guide (upstream):  
+[CONTRIBUTING.md](./CONTRIBUTING.md)
