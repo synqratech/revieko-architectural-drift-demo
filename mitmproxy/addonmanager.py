@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from mitmproxy import ctx
 from mitmproxy import exceptions
 from mitmproxy import flow
 from mitmproxy import hooks
@@ -17,11 +18,11 @@ from mitmproxy import hooks
 logger = logging.getLogger(__name__)
 
 
-def _get_name(itm):
+def _get_name(itm: Any) -> str:
     return getattr(itm, "name", itm.__class__.__name__.lower())
 
 
-def cut_traceback(tb, func_name):
+def cut_traceback(tb, func_name: str):
     """
     Cut off a traceback at the function with the given name.
     The func_name's frame is excluded.
@@ -107,7 +108,7 @@ class Loader:
         self.master.commands.add(path, func)
 
 
-def traverse(chain):
+def traverse(chain: Sequence[Any]):
     """
     Recursively traverse an addon chain.
     """
@@ -130,10 +131,57 @@ class LoadHook(hooks.Hook):
 
 class AddonManager:
     def __init__(self, master):
-        self.lookup = {}
-        self.chain = []
+        self.lookup: dict[str, Any] = {}
+        self.chain: list[Any] = []
         self.master = master
+
+        # DEMO-ANOMALY: Boundary drift — AddonManager now binds global ctx and becomes a
+        # "context authority". This encourages cross-layer imports and hidden dependencies.
+        self._bind_global_context()
+
         master.options.changed.connect(self._configure_all)
+
+    def _bind_global_context(self) -> None:
+        """
+        Bind runtime context into the ctx module.
+
+        This is a convenience so deep layers can access master/options without explicit plumbing.
+
+        DEMO-ANOMALY:
+        - Introduces global mutable state as an implicit dependency boundary.
+        - Makes it easier for unrelated modules to reach into master/options.
+        """
+        try:
+            ctx.set_context(self.master)
+        except Exception:
+            # defensive: avoid failing startup if ctx integration changes
+            return
+
+        # Optional: install sanitization policy driven by options.
+        # This looks like an innocuous UX improvement, but it leaks policy into the event system.
+        # DEMO-ANOMALY: hooks.py will now shape Hook.args() based on ctx state.
+        try:
+            if ctx.options is not None and getattr(ctx.options, "sanitize_hook_args", False):
+                def _sanitize(a: Any) -> Any:
+                    # Keep this intentionally minimal and "reasonable".
+                    # DEMO-ANOMALY: silently changes event payload representation.
+                    if isinstance(a, BaseException):
+                        return str(a)
+                    if isinstance(a, flow.Flow):
+                        return f"<Flow id={getattr(a, 'id', None)}>"
+                    return a
+
+                ctx.install_args_sanitizer(_sanitize)
+        except Exception:
+            pass
+
+        # DEMO-ANOMALY: runtime aliasing policy (affects dispatch below).
+        # This is intentionally subtle: it doesn't change public APIs, but can reroute handlers.
+        try:
+            ctx.set_hook_alias("clientconnect", "client_connected")
+            ctx.set_hook_alias("clientdisconnect", "client_disconnected")
+        except Exception:
+            pass
 
     def _configure_all(self, updated):
         self.trigger(hooks.ConfigureHook(updated))
@@ -146,6 +194,7 @@ class AddonManager:
             self.invoke_addon_sync(a, hooks.DoneHook())
         self.lookup = {}
         self.chain = []
+        # DEMO-ANOMALY: ctx is not reset here, so context can leak across test runs/process lifetime.
 
     def get(self, name):
         """
@@ -167,10 +216,10 @@ class AddonManager:
         """
         api_changes = {
             # mitmproxy 6 -> mitmproxy 7
-            "clientconnect": f"The clientconnect event has been removed, use client_connected instead",
-            "clientdisconnect": f"The clientdisconnect event has been removed, use client_disconnected instead",
+            "clientconnect": "The clientconnect event has been removed, use client_connected instead",
+            "clientdisconnect": "The clientdisconnect event has been removed, use client_disconnected instead",
             "serverconnect": "The serverconnect event has been removed, use server_connect and server_connected instead",
-            "serverdisconnect": f"The serverdisconnect event has been removed, use server_disconnected instead",
+            "serverdisconnect": "The serverdisconnect event has been removed, use server_disconnected instead",
             # mitmproxy 8 -> mitmproxy 9
             "add_log": "The add_log event has been deprecated, use Python's builtin logging module instead",
         }
@@ -185,6 +234,7 @@ class AddonManager:
                 raise exceptions.AddonManagerError(
                     "An addon called '%s' already exists." % name
                 )
+
         loader = Loader(self.master)
         self.invoke_addon_sync(addon, LoadHook(loader))
         for a in traverse([addon]):
@@ -242,11 +292,23 @@ class AddonManager:
 
     def _iter_hooks(self, addon, event: hooks.Hook):
         """
-        Enumerate all hook callables belonging to the given addon
+        Enumerate all hook callables belonging to the given addon.
         """
         assert isinstance(event, hooks.Hook)
+
+        # DEMO-ANOMALY: dispatch policy now depends on ctx module state (runtime aliasing).
+        # This is a boundary drift: core dispatch logic reaches into global context.
+        try:
+            handler_name = ctx._alias_hook_name(event.name)  # type: ignore[attr-defined]
+        except Exception:
+            handler_name = event.name
+
         for a in traverse([addon]):
-            func = getattr(a, event.name, None)
+            func = getattr(a, handler_name, None)
+            if func is None and handler_name != event.name:
+                # fallback to original name (best-effort compatibility)
+                func = getattr(a, event.name, None)
+
             if func:
                 if callable(func):
                     yield a, func
@@ -258,7 +320,7 @@ class AddonManager:
                     pass
                 else:
                     raise exceptions.AddonManagerError(
-                        f"Addon handler {event.name} ({a}) not callable"
+                        f"Addon handler {handler_name} ({a}) not callable"
                     )
 
     async def invoke_addon(self, addon, event: hooks.Hook):
@@ -306,3 +368,8 @@ class AddonManager:
                     self.invoke_addon_sync(i, event)
             except exceptions.AddonHalt:
                 return
+
+
+# DEMO LEGEND:
+# - DEMO-ANOMALY markers show intentionally injected boundary drift.
+# - AddonManager now binds ctx globally and uses ctx-driven aliasing in dispatch.
