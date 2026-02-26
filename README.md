@@ -50,7 +50,7 @@ Grant it access to your fork (repository permissions as requested by GitHub duri
 In your fork, create a pull request from a demo branch into your default branch (usually `main`).
 
 - Demo branches are named: `demo/pr-XX-...`
-- A list of scenarios will be tracked in: **DEMO_PRS.md** *(placeholder — to be added)*
+- A list of scenarios will be tracked in: **DEMO_PRS.md**
 
 ### 4) View the report
 Revieko will comment on the PR with:
@@ -59,7 +59,7 @@ Revieko will comment on the PR with:
 
 ---
 
-## Demo PR scenarios (placeholder)
+## Demo PR scenarios
 
 We will add a set of intentionally-designed PRs that simulate common real-world risk patterns:
 
@@ -77,11 +77,9 @@ We will add a set of intentionally-designed PRs that simulate common real-world 
 
 - Documentation: https://synqra.tech/revieko-docs  
 - GitHub App: https://github.com/apps/revieko-architecture-drift-radar  
-- Contact (placeholder):  
-  - Email: `hello@synqra.tech`  
-  - LinkedIn: `https://www.linkedin.com/in/<your-handle>`  
-
-*(Replace placeholders with your actual contacts.)*
+- Contact:  
+  - Email: `anton.f@synqra.tech`  
+  - LinkedIn: `https://www.linkedin.com/in/anvifedotov/`  
 
 ---
 
