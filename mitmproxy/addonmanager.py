@@ -6,6 +6,7 @@ import sys
 import traceback
 import types
 from collections.abc import Callable
+from collections.abc import Iterator
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -17,11 +18,11 @@ from mitmproxy import hooks
 logger = logging.getLogger(__name__)
 
 
-def _get_name(itm):
+def _get_name(itm: Any) -> str:
     return getattr(itm, "name", itm.__class__.__name__.lower())
 
 
-def cut_traceback(tb, func_name):
+def cut_traceback(tb, func_name: str):
     """
     Cut off a traceback at the function with the given name.
     The func_name's frame is excluded.
@@ -107,7 +108,7 @@ class Loader:
         self.master.commands.add(path, func)
 
 
-def traverse(chain):
+def traverse(chain: Sequence[Any]):
     """
     Recursively traverse an addon chain.
     """
@@ -130,8 +131,8 @@ class LoadHook(hooks.Hook):
 
 class AddonManager:
     def __init__(self, master):
-        self.lookup = {}
-        self.chain = []
+        self.lookup: dict[str, Any] = {}
+        self.chain: list[Any] = []
         self.master = master
         master.options.changed.connect(self._configure_all)
 
@@ -167,10 +168,10 @@ class AddonManager:
         """
         api_changes = {
             # mitmproxy 6 -> mitmproxy 7
-            "clientconnect": f"The clientconnect event has been removed, use client_connected instead",
-            "clientdisconnect": f"The clientdisconnect event has been removed, use client_disconnected instead",
+            "clientconnect": "The clientconnect event has been removed, use client_connected instead",
+            "clientdisconnect": "The clientdisconnect event has been removed, use client_disconnected instead",
             "serverconnect": "The serverconnect event has been removed, use server_connect and server_connected instead",
-            "serverdisconnect": f"The serverdisconnect event has been removed, use server_disconnected instead",
+            "serverdisconnect": "The serverdisconnect event has been removed, use server_disconnected instead",
             # mitmproxy 8 -> mitmproxy 9
             "add_log": "The add_log event has been deprecated, use Python's builtin logging module instead",
         }
@@ -242,7 +243,7 @@ class AddonManager:
 
     def _iter_hooks(self, addon, event: hooks.Hook):
         """
-        Enumerate all hook callables belonging to the given addon
+        Enumerate all hook callables belonging to the given addon.
         """
         assert isinstance(event, hooks.Hook)
         for a in traverse([addon]):
@@ -261,12 +262,59 @@ class AddonManager:
                         f"Addon handler {event.name} ({a}) not callable"
                     )
 
+    def _build_lazy_pipeline(
+        self,
+        root_addon: Any,
+        event: hooks.Hook,
+        *,
+        sync: bool,
+    ) -> Iterator[Callable[[], Any]]:
+        """
+        Build a lazy invocation pipeline for all hook handlers.
+
+        The pipeline yields zero-arg callables ("steps") that execute a single handler.
+        This keeps allocation minimal and lets callers control flow explicitly.
+
+        DEMO-ANOMALY: This introduces non-obvious control flow (generators + closures).
+        It becomes harder to reason about which handler runs when, and stack traces become noisier.
+        """
+        assert isinstance(event, hooks.Hook)
+
+        # Small "optimization": compute args once and reuse for all hook calls.
+        # (This looks reasonable, but can hide subtle behavior if args are expected to be re-evaluated.)
+        args = event.args()
+
+        for addon, func in self._iter_hooks(root_addon, event):
+            if sync and inspect.iscoroutinefunction(func):
+                # Keep the original contract for sync contexts.
+                raise exceptions.AddonManagerError(
+                    f"Async handler {event.name} ({addon}) cannot be called from sync context"
+                )
+
+            # DEMO-ANOMALY: Closure captures loop variables (addon/func) by reference.
+            # If this generator is consumed later or partially, steps may call the "wrong" function.
+            # A correct implementation would bind defaults: def step(func=func, addon=addon): ...
+            def step():
+                return func(*args)
+
+            yield step
+
     async def invoke_addon(self, addon, event: hooks.Hook):
         """
         Asynchronously invoke an event on an addon and all its children.
+
+        This uses a lazy generator pipeline to reduce intermediate allocations.
         """
-        for addon, func in self._iter_hooks(addon, event):
-            res = func(*event.args())
+        pipeline = self._build_lazy_pipeline(addon, event, sync=False)
+
+        # DEMO-ANOMALY: Explicit next() loop makes control flow non-linear and harder to debug.
+        while True:
+            step = next(pipeline, None)
+            if step is None:
+                break
+
+            res = step()
+
             # Support both async and sync hook functions
             if res is not None and inspect.isawaitable(res):
                 await res
@@ -274,18 +322,33 @@ class AddonManager:
     def invoke_addon_sync(self, addon, event: hooks.Hook):
         """
         Invoke an event on an addon and all its children.
+
+        Uses the same pipeline builder in sync mode.
         """
-        for addon, func in self._iter_hooks(addon, event):
-            if inspect.iscoroutinefunction(func):
-                raise exceptions.AddonManagerError(
-                    f"Async handler {event.name} ({addon}) cannot be called from sync context"
+        pipeline = self._build_lazy_pipeline(addon, event, sync=True)
+
+        while True:
+            step = next(pipeline, None)
+            if step is None:
+                break
+
+            res = step()
+
+            # DEMO-ANOMALY: If a sync handler returns an awaitable by mistake,
+            # we silently ignore it here to "keep going".
+            # This can lead to unawaited coroutine warnings and hidden behavior drift.
+            if res is not None and inspect.isawaitable(res):
+                logger.debug(
+                    "Ignoring awaitable returned from sync hook handler: hook=%s addon_root=%s",
+                    event.name,
+                    _get_name(addon),
                 )
-            func(*event.args())
 
     async def trigger_event(self, event: hooks.Hook):
         """
         Asynchronously trigger an event across all addons.
         """
+        # "Optimized" path: build pipelines per addon and drain them step-by-step.
         for i in self.chain:
             try:
                 with safecall():
@@ -306,3 +369,8 @@ class AddonManager:
                     self.invoke_addon_sync(i, event)
             except exceptions.AddonHalt:
                 return
+
+
+# DEMO LEGEND:
+# - DEMO-ANOMALY comments mark intentionally risky changes for the demo PR.
+# - This branch introduces generator/closure-based invocation pipelines with implicit flow control.
