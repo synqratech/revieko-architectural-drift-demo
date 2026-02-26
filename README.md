@@ -1,6 +1,6 @@
 # Revieko Demo Fork — mitmproxy (Architectural Drift & Structural Risk)
 
-This repository is a **demo fork** of **[mitmproxy/mitmproxy](https://github.com/mitmproxy/mitmproxy)** (MIT licensed) prepared to showcase **Revieko — Architecture Drift Radar** on a real-world Python backend codebase.
+This repository is a **demo fork** of **[mitmproxy/mitmproxy](https://github.com/mitmproxy/mitmproxy)** (MIT licensed), prepared to showcase **Revieko — Architecture Drift Radar** on a real-world Python backend codebase.
 
 - Upstream project: https://github.com/mitmproxy/mitmproxy  
 - License: MIT (see [LICENSE](./LICENSE))  
@@ -20,6 +20,28 @@ Modern PRs (especially large or AI-assisted ones) can look safe:
 …and still drift architecture, expand blast radius, or introduce hidden coupling.
 
 This repo is prepared so you can **fork → open a prebuilt PR → get a Revieko report** in minutes.
+
+---
+
+## Why this codebase (and this module)
+
+This demo focuses on a classic **blast-radius hotspot**: an **event dispatcher / addon manager**.
+Small “refactors”, “optimizations”, or “resilience improvements” in dispatch code can silently change system semantics:
+- whether handlers run at all
+- ordering and routing behavior
+- error semantics (fail-fast vs swallow)
+- cross-run coupling via hidden shared state
+
+Those changes often slip through superficial review because the code still looks reasonable and CI can remain green.
+
+---
+
+## What you should see in the demo
+
+After you open a demo PR and Revieko is installed on your fork, you should see:
+- a **PR comment** with a short risk summary
+- a link to a **full HTML report**
+- a **Hotspots** table that points to the highest-risk lines first
 
 ---
 
@@ -63,15 +85,79 @@ Revieko will comment on the PR with:
 
 Each demo PR is intentionally designed to be *plausible* (“optimization”, “resilience”, “refactor”, “unification”), while injecting a clear risk pattern that tends to slip through superficial review.
 
-Common patterns covered:
-- hidden global state / hidden coupling  
-- boundary drift across layers  
-- non-obvious control flow (generators/closures)  
-- silent contract changes (error handling semantics)  
-- registry/ordering changes with large blast radius  
+### Demo matrix (PR → pattern → what to look for)
+
+| Demo PR | Pattern | What changes | Where you should see hotspots first |
+|---|---|---|---|
+| PR-01 | Hidden coupling | Global singleton + dispatch gate | Dedup/state + invocation gate in dispatcher |
+| PR-02 | Non-obvious control flow | Generator/closure pipeline | Pipeline builder (`yield step`) + sync/async boundary |
+| PR-03 | Silent contract drift | Error semantics become “best effort” | Best-effort safecall + trigger branches + load-time swallow |
+| PR-04 | Boundary drift | Cross-layer imports + global context | `hooks` ↔ `ctx` dependency + args/routing shaped by runtime state |
+| PR-05 | Registry blast radius | Naming/aliasing/ordering becomes behavior | Hook registry normalization + alias conflicts + addon ordering |
 
 ➡️ See **[DEMO_PRS.md](./DEMO_PRS.md)**  
 All demo branches include `DEMO-ANOMALY` markers in code for easy human inspection.
+
+---
+
+## How to read the report
+
+Revieko is a **risk-first radar**. The goal is to help you decide **where to look first**, not to prove correctness.
+
+- **`risk_level`**: overall risk label for the PR/file(s).
+- **`struct_risk (0–100)`**: aggregate structural risk. *Not* “probability of a bug”.
+- **Hotspots**
+  - **`Score`**: local anomaly strength (higher = more abnormal).
+  - **`Kind`**
+    - `struct_pattern_break`: a local break in an expected structural pattern.
+    - `depth_spike`: localized complexity increase (nesting/shape change).
+    - `control_outlier`: unusual control-flow shape compared to nearby code.
+    - `mixed`: multiple weaker structural signals at the same location.
+  - **`Effects/Taint/Control`**: heuristic tags (best-effort). They may be empty or occasionally inaccurate.
+
+---
+
+## What to do with a hotspot (reviewer checklist)
+
+Hotspots are most valuable in **blast-radius modules** (dispatchers, registries, boundary layers).
+
+When a hotspot is in a dispatcher/manager module, ask:
+- Does this change **whether** handlers run (skip paths / gates / dedup)?
+- Does this introduce **global/shared state** or cross-run coupling?
+- Does this change **ordering/routing** semantics?
+- Does this change **error semantics** (swallow vs fail-fast)?
+- Does this blur **sync/async** contracts?
+- Is there a test that proves the contract still holds?
+
+---
+
+## Non-goals (what this demo/app is not)
+
+- Not a bug finder.
+- Not a security scanner.
+- Not a linter or style checker.
+- Not a replacement for tests, CodeQL, SAST, or standard review.
+
+It’s a **structural + semantic radar** for architectural drift and blast-radius risk.
+
+---
+
+## Troubleshooting
+
+### I don’t see a Revieko comment
+- Confirm the app is installed: https://github.com/apps/revieko-architecture-drift-radar  
+- Confirm the app has access to **your fork** (GitHub install permissions).
+- Confirm the PR is opened **in the fork** where the app is installed.
+
+### My fork doesn’t have `demo/pr-*` branches
+- When forking, make sure you don’t fork only the default branch.
+- If you already forked default-only, re-fork with all branches (or fetch branches manually).
+
+### The PR uses the wrong base branch
+- Open the PR from `demo/pr-XX-*` **into your default branch** (usually `main`).
+
+### CI shows `warn`
+Some demo PRs intentionally include refactors that may cause warnings. The focus is the **architecture/risk report**, not CI perfection.
 
 ---
 
