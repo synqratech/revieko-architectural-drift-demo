@@ -17,11 +17,11 @@ from mitmproxy import hooks
 logger = logging.getLogger(__name__)
 
 
-def _get_name(itm):
+def _get_name(itm: Any) -> str:
     return getattr(itm, "name", itm.__class__.__name__.lower())
 
 
-def cut_traceback(tb, func_name):
+def cut_traceback(tb, func_name: str):
     """
     Cut off a traceback at the function with the given name.
     The func_name's frame is excluded.
@@ -55,6 +55,62 @@ def safecall():
         assert value
         logger.error(
             f"Addon error: {value}",
+            exc_info=(etype, value, tb),
+        )
+
+
+# Hooks that are considered "best effort". Failures should not stop processing.
+# DEMO-ANOMALY: This silently changes the contract for these hooks by swallowing AddonHalt/OptionsError.
+_BEST_EFFORT_HOOKS = {
+    "configure",
+    "update",
+}
+
+
+def _best_effort(event: hooks.Hook) -> bool:
+    """
+    Decide whether hook errors should be treated as best-effort.
+
+    DEMO-ANOMALY: Using event.name as a policy key is brittle (renames change behavior).
+    """
+    return event.name in _BEST_EFFORT_HOOKS
+
+
+@contextlib.contextmanager
+def safecall_best_effort(event: hooks.Hook, addon: Any):
+    """
+    A more tolerant safecall that prevents one addon from interrupting the chain.
+
+    DEMO-ANOMALY:
+    - Swallows AddonHalt and OptionsError for selected hooks.
+    - Downgrades error to warning; stack traces become less visible.
+    """
+    try:
+        yield
+    except exceptions.AddonHalt as e:
+        logger.warning(
+            "Best-effort hook halted by addon (ignored): hook=%s addon=%s reason=%s",
+            event.name,
+            _get_name(addon),
+            e,
+        )
+    except exceptions.OptionsError as e:
+        logger.warning(
+            "Best-effort hook options error (ignored): hook=%s addon=%s reason=%s",
+            event.name,
+            _get_name(addon),
+            e,
+        )
+    except Exception as e:
+        # Keep traceback but change severity and semantics (continue).
+        etype, value, tb = sys.exc_info()
+        tb = cut_traceback(tb, "invoke_addon_sync")
+        tb = cut_traceback(tb, "invoke_addon")
+        logger.warning(
+            "Best-effort addon error (ignored): hook=%s addon=%s err=%s",
+            event.name,
+            _get_name(addon),
+            e,
             exc_info=(etype, value, tb),
         )
 
@@ -107,7 +163,7 @@ class Loader:
         self.master.commands.add(path, func)
 
 
-def traverse(chain):
+def traverse(chain: Sequence[Any]):
     """
     Recursively traverse an addon chain.
     """
@@ -128,10 +184,19 @@ class LoadHook(hooks.Hook):
     loader: Loader
 
 
+@dataclass(frozen=True)
+class _HookContext:
+    """
+    Purely diagnostic context for logging and debugging.
+    """
+    hook: str
+    addon: str
+
+
 class AddonManager:
     def __init__(self, master):
-        self.lookup = {}
-        self.chain = []
+        self.lookup: dict[str, Any] = {}
+        self.chain: list[Any] = []
         self.master = master
         master.options.changed.connect(self._configure_all)
 
@@ -167,10 +232,10 @@ class AddonManager:
         """
         api_changes = {
             # mitmproxy 6 -> mitmproxy 7
-            "clientconnect": f"The clientconnect event has been removed, use client_connected instead",
-            "clientdisconnect": f"The clientdisconnect event has been removed, use client_disconnected instead",
+            "clientconnect": "The clientconnect event has been removed, use client_connected instead",
+            "clientdisconnect": "The clientdisconnect event has been removed, use client_disconnected instead",
             "serverconnect": "The serverconnect event has been removed, use server_connect and server_connected instead",
-            "serverdisconnect": f"The serverdisconnect event has been removed, use server_disconnected instead",
+            "serverdisconnect": "The serverdisconnect event has been removed, use server_disconnected instead",
             # mitmproxy 8 -> mitmproxy 9
             "add_log": "The add_log event has been deprecated, use Python's builtin logging module instead",
         }
@@ -185,8 +250,23 @@ class AddonManager:
                 raise exceptions.AddonManagerError(
                     "An addon called '%s' already exists." % name
                 )
+
         loader = Loader(self.master)
-        self.invoke_addon_sync(addon, LoadHook(loader))
+        hook = LoadHook(loader)
+
+        # DEMO-ANOMALY: "resilient startup" — swallow load-time exceptions and continue registration.
+        # This changes the contract: previously, a failing load would stop registration.
+        try:
+            self.invoke_addon_sync(addon, hook)
+        except exceptions.AddonHalt:
+            # "Don't let one addon block startup" (sounds reasonable, but changes semantics).
+            logger.warning("Addon load halted (ignored): %s", _get_name(addon))
+        except exceptions.OptionsError as e:
+            # Default fallback: ignore option errors during load.
+            logger.warning("Addon load options error (ignored): addon=%s err=%s", _get_name(addon), e)
+        except Exception as e:
+            logger.warning("Addon load error (ignored): addon=%s err=%s", _get_name(addon), e, exc_info=True)
+
         for a in traverse([addon]):
             name = _get_name(a)
             self.lookup[name] = a
@@ -217,6 +297,8 @@ class AddonManager:
                 raise exceptions.AddonManagerError("No such addon: %s" % n)
             self.chain = [i for i in self.chain if i is not a]
             del self.lookup[_get_name(a)]
+
+        # Keep DoneHook strict (no best-effort here) — looks consistent.
         self.invoke_addon_sync(addon, hooks.DoneHook())
 
     def __len__(self):
@@ -287,10 +369,18 @@ class AddonManager:
         Asynchronously trigger an event across all addons.
         """
         for i in self.chain:
+            ctx = _HookContext(hook=event.name, addon=_get_name(i))
             try:
-                with safecall():
-                    await self.invoke_addon(i, event)
+                if _best_effort(event):
+                    # DEMO-ANOMALY: best-effort semantics silently swallow AddonHalt/OptionsError for selected hooks.
+                    with safecall_best_effort(event, i):
+                        await self.invoke_addon(i, event)
+                else:
+                    with safecall():
+                        await self.invoke_addon(i, event)
             except exceptions.AddonHalt:
+                # Only stops the chain for non-best-effort hooks now.
+                logger.debug("Addon chain halted: %s", ctx)
                 return
 
     def trigger(self, event: hooks.Hook):
@@ -301,8 +391,21 @@ class AddonManager:
         Use `trigger_event()` instead, which provides the same functionality but supports async hooks.
         """
         for i in self.chain:
+            ctx = _HookContext(hook=event.name, addon=_get_name(i))
             try:
-                with safecall():
-                    self.invoke_addon_sync(i, event)
+                if _best_effort(event):
+                    # DEMO-ANOMALY: silent contract drift in sync path too.
+                    with safecall_best_effort(event, i):
+                        self.invoke_addon_sync(i, event)
+                else:
+                    with safecall():
+                        self.invoke_addon_sync(i, event)
             except exceptions.AddonHalt:
+                logger.debug("Addon chain halted: %s", ctx)
                 return
+
+
+# DEMO LEGEND:
+# - DEMO-ANOMALY comments mark intentionally risky changes for the demo PR.
+# - This branch introduces "best effort" error handling that can silently swallow AddonHalt/OptionsError,
+#   changing hook contracts without an explicit public API change.
