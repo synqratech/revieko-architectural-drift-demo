@@ -1,3 +1,4 @@
+# addonmanager.py
 import contextlib
 import inspect
 import logging
@@ -17,11 +18,11 @@ from mitmproxy import hooks
 logger = logging.getLogger(__name__)
 
 
-def _get_name(itm):
+def _get_name(itm: Any) -> str:
     return getattr(itm, "name", itm.__class__.__name__.lower())
 
 
-def cut_traceback(tb, func_name):
+def cut_traceback(tb, func_name: str):
     """
     Cut off a traceback at the function with the given name.
     The func_name's frame is excluded.
@@ -107,7 +108,7 @@ class Loader:
         self.master.commands.add(path, func)
 
 
-def traverse(chain):
+def traverse(chain: Sequence[Any]):
     """
     Recursively traverse an addon chain.
     """
@@ -130,8 +131,8 @@ class LoadHook(hooks.Hook):
 
 class AddonManager:
     def __init__(self, master):
-        self.lookup = {}
-        self.chain = []
+        self.lookup: dict[str, Any] = {}
+        self.chain: list[Any] = []
         self.master = master
         master.options.changed.connect(self._configure_all)
 
@@ -167,10 +168,10 @@ class AddonManager:
         """
         api_changes = {
             # mitmproxy 6 -> mitmproxy 7
-            "clientconnect": f"The clientconnect event has been removed, use client_connected instead",
-            "clientdisconnect": f"The clientdisconnect event has been removed, use client_disconnected instead",
+            "clientconnect": "The clientconnect event has been removed, use client_connected instead",
+            "clientdisconnect": "The clientdisconnect event has been removed, use client_disconnected instead",
             "serverconnect": "The serverconnect event has been removed, use server_connect and server_connected instead",
-            "serverdisconnect": f"The serverdisconnect event has been removed, use server_disconnected instead",
+            "serverdisconnect": "The serverdisconnect event has been removed, use server_disconnected instead",
             # mitmproxy 8 -> mitmproxy 9
             "add_log": "The add_log event has been deprecated, use Python's builtin logging module instead",
         }
@@ -185,6 +186,7 @@ class AddonManager:
                 raise exceptions.AddonManagerError(
                     "An addon called '%s' already exists." % name
                 )
+
         loader = Loader(self.master)
         self.invoke_addon_sync(addon, LoadHook(loader))
         for a in traverse([addon]):
@@ -245,20 +247,33 @@ class AddonManager:
         Enumerate all hook callables belonging to the given addon
         """
         assert isinstance(event, hooks.Hook)
+
+        # DEMO-ANOMALY: Use hooks registry to resolve aliases/canonical names.
+        # This makes dispatch sensitive to registry changes in hooks.py (blast radius).
+        handler_name = event.name
+        try:
+            alias_map = getattr(hooks, "hook_aliases", {})
+            handler_name = alias_map.get(handler_name, handler_name)
+        except Exception:
+            handler_name = event.name
+
         for a in traverse([addon]):
-            func = getattr(a, event.name, None)
+            func = getattr(a, handler_name, None)
+            if func is None and handler_name != event.name:
+                # fallback to original name
+                func = getattr(a, event.name, None)
+
             if func:
                 if callable(func):
                     yield a, func
                 elif isinstance(func, types.ModuleType):
-                    # we gracefully exclude module imports with the same name as hooks.
-                    # For example, a user may have "from mitmproxy import log" in an addon,
-                    # which has the same name as the "log" hook. In this particular case,
-                    # we end up in an error loop because we "log" this error.
                     pass
                 else:
                     raise exceptions.AddonManagerError(
-                        f"Addon handler {event.name} ({a}) not callable"
+                        f"Addon handler {handler_name} ({a}) not callable",
+                        addon=_get_name(a),
+                        hook=handler_name,
+                        detail={"event": event.__class__.__name__},
                     )
 
     async def invoke_addon(self, addon, event: hooks.Hook):
@@ -267,7 +282,6 @@ class AddonManager:
         """
         for addon, func in self._iter_hooks(addon, event):
             res = func(*event.args())
-            # Support both async and sync hook functions
             if res is not None and inspect.isawaitable(res):
                 await res
 
@@ -278,7 +292,9 @@ class AddonManager:
         for addon, func in self._iter_hooks(addon, event):
             if inspect.iscoroutinefunction(func):
                 raise exceptions.AddonManagerError(
-                    f"Async handler {event.name} ({addon}) cannot be called from sync context"
+                    f"Async handler {event.name} ({addon}) cannot be called from sync context",
+                    addon=_get_name(addon),
+                    hook=event.name,
                 )
             func(*event.args())
 
@@ -306,3 +322,8 @@ class AddonManager:
                     self.invoke_addon_sync(i, event)
             except exceptions.AddonHalt:
                 return
+
+
+# DEMO LEGEND:
+# - DEMO-ANOMALY markers show intentionally injected blast-radius changes.
+# - Addon dispatch now depends on hooks.py registry/aliases, so small hook registry changes can reroute handlers.
