@@ -143,4 +143,4 @@ If you want to explore further, compare:
 
 - GitHub App: https://github.com/apps/revieko-architecture-drift-radar  
 - Docs: https://synqra.tech/revieko-docs  
-- Contact: *(add your preferred email/LinkedIn here)*
+- Contact: https://www.linkedin.com/in/anvifedotov/
